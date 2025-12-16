@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "Void/proto/chatpb";
+
+message Message {
+  string id = 1;
+  string room_id = 2;
+  string user_id = 3;
+  string content = 4;
+  int64 timestamp = 5;
+  bytes encrypted_content = 6;
+}
+
+message RoomRequest {
+  string room_id = 1;
+  string user_id = 2;
+  string username = 3;
+  bytes public_key = 4;
+}
+
+message RoomResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Peer peers = 3;
+  string user_id = 4;
+}
+
+message Peer {
+  string user_id = 1;
+  string username = 2;
+  bytes public_key = 3;
+}
+
+message SendMessage {
+  string room_id = 1;
+  bytes encrypted_content = 2;
+}
+
+message ReceiveMessage {
+  string id = 1;
+  string user_id = 2;
+  string username = 3;
+  bytes encrypted_content = 4;
+  int64 timestamp = 5;
+}
+
+message ServerMessage {
+  oneof payload {
+    ReceiveMessage message = 1;
+    PeerJoined peer_joined = 2;
+    PeerLeft peer_left = 3;
+    RoomResponse room_response = 4;
+  }
+}
+
+message PeerJoined {
+  string user_id = 1;
+  string username = 2;
+  bytes public_key = 3;
+}
+
+message PeerLeft {
+  string user_id = 1;
+}
+
+message ClientMessage {
+  oneof payload {
+    RoomRequest join_room = 1;
+    SendMessage send_message = 2;
+    RoomRequest leave_room = 3;
+  }
+}
+
