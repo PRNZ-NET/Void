@@ -20,21 +20,22 @@ type PeerInfo struct {
 }
 
 type ChatClient struct {
-	conn                net.Conn
-	publicKey           *[32]byte
-	privateKey          *[32]byte
-	peers               map[string][32]byte
-	peersMu             sync.RWMutex
-	knownFingerprints   map[string]string
-	fingerprintsMu      sync.RWMutex
-	username            string
-	roomID              string
-	myUserID            string
-	onMessage           func(userID string, username string, content string)
-	onPeerJoin          func(userID string, username string, publicKey [32]byte)
-	onPeerLeft          func(userID string)
-	onRoomResponse      func(peers []PeerInfo)
-	onKeyMismatch       func(userID string, username string, expectedFingerprint string, receivedFingerprint string)
+	conn              net.Conn
+	publicKey         *[32]byte
+	privateKey        *[32]byte
+	peers             map[string][32]byte
+	peersMu           sync.RWMutex
+	knownFingerprints map[string]string
+	fingerprintsMu    sync.RWMutex
+	username          string
+	roomID            string
+	myUserID          string
+	onMessage         func(userID string, username string, content string)
+	onPeerJoin        func(userID string, username string, publicKey [32]byte)
+	onPeerLeft        func(userID string)
+	onRoomResponse    func(peers []PeerInfo)
+	onKeyMismatch     func(userID string, username string, expectedFingerprint string, receivedFingerprint string)
+	onRoomError       func(message string)
 }
 
 func NewChatClient(username string) (*ChatClient, error) {
@@ -54,10 +55,11 @@ func NewChatClient(username string) (*ChatClient, error) {
 		onPeerLeft:        func(string) {},
 		onRoomResponse:    func([]PeerInfo) {},
 		onKeyMismatch:     func(string, string, string, string) {},
+		onRoomError:       func(string) {},
 	}, nil
 }
 
-func (cc *ChatClient) Connect(address string, roomID string) error {
+func (cc *ChatClient) Connect(address string, roomID string, password string) error {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return err
@@ -72,6 +74,7 @@ func (cc *ChatClient) Connect(address string, roomID string) error {
 				UserId:    "",
 				Username:  cc.username,
 				PublicKey: cc.publicKey[:],
+				Password:  password,
 			},
 		},
 	}
@@ -119,6 +122,10 @@ func (cc *ChatClient) readLoop() {
 }
 
 func (cc *ChatClient) roomResponse(resp *chatpb.RoomResponse) {
+	if !resp.GetSuccess() {
+		cc.onRoomError(resp.GetMessage())
+		return
+	}
 	cc.myUserID = resp.GetUserId()
 	cc.peersMu.Lock()
 	peerInfos := make([]PeerInfo, 0, len(resp.GetPeers()))
@@ -217,7 +224,7 @@ func (cc *ChatClient) encryptForAllPeers(content string) ([][]byte, error) {
 		userID string
 		key    [32]byte
 	}
-	
+
 	peers := make([]peerKeyPair, 0, len(cc.peers))
 	for userID, key := range cc.peers {
 		peers = append(peers, peerKeyPair{userID: userID, key: key})
@@ -257,18 +264,22 @@ func (cc *ChatClient) SetOnKeyMismatch(fn func(userID string, username string, e
 	cc.onKeyMismatch = fn
 }
 
+func (cc *ChatClient) SetOnRoomError(fn func(message string)) {
+	cc.onRoomError = fn
+}
+
 func (cc *ChatClient) verifyPeerKey(userID string, username string, publicKey *[32]byte) {
 	currentFingerprint := keyverify.ComputeKeyFingerprint(publicKey)
-	
+
 	cc.fingerprintsMu.RLock()
 	knownFingerprint, exists := cc.knownFingerprints[userID]
 	cc.fingerprintsMu.RUnlock()
-	
+
 	if exists && knownFingerprint != currentFingerprint {
 		cc.onKeyMismatch(userID, username, knownFingerprint, currentFingerprint)
 		return
 	}
-	
+
 	if !exists {
 		cc.fingerprintsMu.Lock()
 		cc.knownFingerprints[userID] = currentFingerprint
@@ -323,4 +334,3 @@ func (cc *ChatClient) Close() error {
 	}
 	return nil
 }
-

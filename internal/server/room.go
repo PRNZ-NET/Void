@@ -5,15 +5,17 @@ import (
 )
 
 type Room struct {
-	ID      string
-	Clients map[string]*Connection
-	mu      sync.RWMutex
+	ID       string
+	Password string
+	Clients  map[string]*Connection
+	mu       sync.RWMutex
 }
 
-func NewRoom(id string) *Room {
+func NewRoom(id string, password string) *Room {
 	return &Room{
-		ID:      id,
-		Clients: make(map[string]*Connection),
+		ID:       id,
+		Password: password,
+		Clients:  make(map[string]*Connection),
 	}
 }
 
@@ -67,4 +69,3 @@ func (r *Room) ClientCount() int {
 	defer r.mu.RUnlock()
 	return len(r.Clients)
 }
-

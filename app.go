@@ -26,7 +26,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-func (a *App) ConnectToRoom(serverAddress string, roomID string, username string) (string, error) {
+func (a *App) ConnectToRoom(serverAddress string, roomID string, username string, password string) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -53,6 +53,8 @@ func (a *App) ConnectToRoom(serverAddress string, roomID string, username string
 	})
 
 	client.SetOnRoomResponse(func(peers []chatclient.PeerInfo) {
+		myUserID := client.GetUserID()
+		runtime.EventsEmit(a.ctx, "myUserId", myUserID)
 		for _, peer := range peers {
 			publicKey, exists := client.GetPeerKey(peer.UserID)
 			if exists {
@@ -68,9 +70,13 @@ func (a *App) ConnectToRoom(serverAddress string, roomID string, username string
 		runtime.EventsEmit(a.ctx, "keyMismatch", userID, username, expectedFingerprint, receivedFingerprint)
 	})
 
+	client.SetOnRoomError(func(message string) {
+		runtime.EventsEmit(a.ctx, "roomError", message)
+	})
+
 	a.client = client
 
-	if err := client.Connect(serverAddress, roomID); err != nil {
+	if err := client.Connect(serverAddress, roomID, password); err != nil {
 		return "", err
 	}
 

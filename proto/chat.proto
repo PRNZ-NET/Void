@@ -18,6 +18,7 @@ message RoomRequest {
   string user_id = 2;
   string username = 3;
   bytes public_key = 4;
+  string password = 5;
 }
 
 message RoomResponse {

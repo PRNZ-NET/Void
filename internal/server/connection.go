@@ -75,9 +75,28 @@ func (c *Connection) joinRoom(req *chatpb.RoomRequest) {
 	s := c.server
 	s.roomsMu.Lock()
 	room, exists := s.rooms[req.RoomId]
+
 	if !exists {
-		room = NewRoom(req.RoomId)
+		room = NewRoom(req.RoomId, req.Password)
 		s.rooms[req.RoomId] = room
+	} else {
+		if room.Password != "" && room.Password != req.Password {
+			s.roomsMu.Unlock()
+			roomResp := &chatpb.RoomResponse{
+				Success: false,
+				Message: "Invalid password",
+				Peers:   nil,
+				UserId:  "",
+			}
+			response := &chatpb.ServerMessage{
+				Payload: &chatpb.ServerMessage_RoomResponse{
+					RoomResponse: roomResp,
+				},
+			}
+			data, _ := proto.Marshal(response)
+			c.sendData(data)
+			return
+		}
 	}
 	s.roomsMu.Unlock()
 
@@ -181,4 +200,3 @@ func (c *Connection) leaveRoom() {
 	}
 	c.server.removeClient(c)
 }
-
